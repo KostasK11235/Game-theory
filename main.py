@@ -133,7 +133,7 @@ def generate_winlose_game_without_pne(m, n, G01, G10, earliestColFor01, earliest
         # WRONG INPUT PARAMETERS
         print(bcolors.ERROR + "ERROR MESSAGE GEN 1: wrong input parameters" + bcolors.ENDC)
         return (
-        -1, np.zeros([maxNumberOfActions, maxNumberOfActions]), np.zeros([maxNumberOfActions, maxNumberOfActions]))
+            -1, np.zeros([maxNumberOfActions, maxNumberOfActions]), np.zeros([maxNumberOfActions, maxNumberOfActions]))
 
     # initialization of the two payoff matrices...
     R = np.zeros([m, n])
@@ -471,8 +471,8 @@ def deleteStrictlyDominatedStrategies(m, n, R, C):
              * Each (0,*)-ROW in the bimatrix must be removed.
              * Each (*,0)-COLUMN in the bimatrix must be removed.
              ''' + bcolors.ENDC)
-    reduced_R = np.zeros([m, n])
-    reduced_C = np.zeros([m, n])
+    reduced_R = R
+    reduced_C = C
     Row_to_delete = [0] * m
     Column_to_delete = [0] * n
 
@@ -622,8 +622,8 @@ def approxNEConstructionFP(m, n, R, C):
         row_beliefs[row_best_response] = 1
         column_beliefs[col_best_response] = 1
 
-    uniform_row_beliefs = np.ones(m)/m
-    uniform_column_beliefs = np.ones(n)/n
+    uniform_row_beliefs = np.ones(m) / m
+    uniform_column_beliefs = np.ones(n) / n
 
     for i in range(1, 20):
         uniform_row_best_response = np.max(np.dot(uniform_column_beliefs, R.T))
@@ -634,14 +634,19 @@ def approxNEConstructionFP(m, n, R, C):
         uniform_row_beliefs = np.zeros(m)
         uniform_column_beliefs = np.zeros(n)
         for index in row_max_indexes:
-            uniform_row_beliefs[index] = 1/len(row_max_indexes)
+            uniform_row_beliefs[index] = 1 / len(row_max_indexes)
 
         for index in col_max_indexes:
-            uniform_column_beliefs[index] = 1/len(col_max_indexes)
+            uniform_column_beliefs[index] = 1 / len(col_max_indexes)
 
+    row_beliefs = np.array(row_beliefs).reshape(len(row_beliefs), 1)
+    uniform_row_beliefs = np.array(uniform_row_beliefs).reshape(len(uniform_row_beliefs), 1)
     (epsAPPROX, epsWSNE) = computeApproximationGuarantees(m, n, R, C, row_beliefs, column_beliefs)
-    (uniform_epsAPPROX, uniform_epsWSNE) = computeApproximationGuarantees(m, n, R, C, uniform_row_beliefs, uniform_column_beliefs)
-    return (row_beliefs, column_beliefs, uniform_row_beliefs, uniform_column_beliefs, epsAPPROX, epsWSNE, uniform_epsAPPROX, uniform_epsWSNE)
+    (uniform_epsAPPROX, uniform_epsWSNE) = computeApproximationGuarantees(m, n, R, C, uniform_row_beliefs,
+                                                                          uniform_column_beliefs)
+    return (
+    row_beliefs, column_beliefs, uniform_row_beliefs, uniform_column_beliefs, epsAPPROX, epsWSNE, uniform_epsAPPROX,
+    uniform_epsWSNE)
 
 
 def approxNEConstructionDEL(m, n, R, C):
@@ -651,9 +656,13 @@ def approxNEConstructionDEL(m, n, R, C):
     POST:   A profile of strategies (x,y) produced by the DEL algorithm.''' + bcolors.ENDC)
 
     x_row, y_row = solveZeroSumGame(m, n, R)  # this example solves (R,-R)
+    print(x_row)
+    print(y_row)
     x_row_trans = np.array(x_row).reshape(1, len(x_row))
     V_row = np.dot(x_row_trans, np.dot(R, y_row))
     x_col, y_col = solveZeroSumGame(m, n, C)  # this example solves (C,-C)
+    print(x_col)
+    print(y_col)
     x_col_trans = np.array(x_col).reshape(1, len(x_col))
     V_col = np.dot(x_col_trans, np.dot(C, y_col))
 
@@ -678,7 +687,6 @@ def approxNEConstructionDEL(m, n, R, C):
     elif max((np.dot(np.array(x_row).reshape(1, len(x_row)), C)) <= 2 / 3):
         x_final = x_row
         y_final = y_row
-
     else:
         j = np.dot(np.array(x_row).reshape(1, len(x_row)), C).index(
             max(np.dot(np.array(x_row).reshape(1, len(x_row)), C)))
@@ -689,6 +697,16 @@ def approxNEConstructionDEL(m, n, R, C):
         y_final = [0] * n
         x_final[index] = 1
         y_final[index] = 1
+
+    if (V_row < V_col):
+        tempR = R
+        tempm = m
+        R = C
+        C = tempR
+        m = n
+        n = tempm
+
+    x_final = np.array(x_final).reshape(len(x_final), 1)
 
     epsAPPROX, epsWSNE = computeApproximationGuarantees(m, n, R, C, x_final, y_final)
 
@@ -898,7 +916,6 @@ for i in range(numOfRandomGamesToSolve):
         exit()
     else:
         print(bcolors.MSG + "No pure NE exists for (R,C). Looking for an approximate NE point..." + bcolors.ENDC)
-
     reduced_m, reduced_n, reduced_R, reduced_C = deleteStrictlyDominatedStrategies(m, n, R, C)
 
     print(bcolors.MSG + "Reduced bimatrix, after removal of strictly dominated actions:")
@@ -906,8 +923,8 @@ for i in range(numOfRandomGamesToSolve):
 
     ### EXECUTING DMP ALGORITHM...
     x, y, DMPepsAPPROX, DMPepsWSNE = approxNEConstructionDMP(reduced_m, reduced_n, reduced_R, reduced_C)
-    DMP_Approx_results.append(DMPepsAPPROX)
-    DMP_WSNE_results.append(DMPepsWSNE)
+    DMP_Approx_results.append(round(DMPepsAPPROX, 3))
+    DMP_WSNE_results.append(round(DMPepsWSNE, 3))
     DMP_results_R.append(R)
     DMP_results_C.append(C)
     DMPx, DMPy = interpretReducedStrategiesForOriginalGame(x, y, R, C, reduced_R, reduced_C)
@@ -921,12 +938,12 @@ for i in range(numOfRandomGamesToSolve):
     ### EXECUTING FICTITIOUS PLAY ALGORITHM...
     x, y, x_uniform, y_uniform, FPepsAPPROX, FPepsWSNE, uniformFPepsAPPROX, uniformFPepsWNSE = approxNEConstructionFP(
         reduced_m, reduced_n, reduced_R, reduced_C)
-    FP_Approx_results.append(FPepsAPPROX)
-    FP_WSNE_results.append(FPepsWSNE)
+    FP_Approx_results.append(round(FPepsAPPROX, 4))
+    FP_WSNE_results.append(round(FPepsWSNE, 3))
     FP_results_R.append(R)
     FP_results_C.append(C)
-    FP_Approx_uniform_results.append(uniformFPepsAPPROX)
-    FP_WSNE_uniform_results.append(uniformFPepsWNSE)
+    FP_Approx_uniform_results.append(round(uniformFPepsAPPROX, 3))
+    FP_WSNE_uniform_results.append(round(uniformFPepsWNSE, 3))
     FP_uniform_R.append(R)
     FP_uniform_C.append(C)
     FPx, FPy = interpretReducedStrategiesForOriginalGame(x, y, R, C, reduced_R, reduced_C)
@@ -939,9 +956,10 @@ for i in range(numOfRandomGamesToSolve):
     print(PLUSLINE + bcolors.ENDC)
 
     ### EXECUTING DEL ALGORITHM...
+    print("reduced_m, reduced_n, lenR, lenC", reduced_m, reduced_n, len(reduced_R), len(reduced_C))
     x, y, DELepsAPPROX, DELepsWSNE = approxNEConstructionDEL(reduced_m, reduced_n, reduced_R, reduced_C)
-    DEL_Approx_results.append(DELepsAPPROX)
-    DEL_WSNE_results.append(DELepsWSNE)
+    DEL_Approx_results.append(round(DELepsAPPROX, 3))
+    DEL_WSNE_results.append(round(DELepsWSNE, 3))
     DEL_results_R.append(R)
     DEL_results_C.append(C)
     DELx, DELy = interpretReducedStrategiesForOriginalGame(x, y, R, C, reduced_R, reduced_C)
@@ -962,19 +980,74 @@ DELepsApprox_games = []
 DELepsWSNE_games = []
 
 # Define the boundaries for the buckets
-bucket_boundaries = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+bucket_boundaries = [0.001, 0.101, 0.201, 0.301, 0.401, 0.501, 0.601, 0.701, 0.801, 0.901, 1.001]
 
 # Compute the histogram
 DMPApproxNEHistogram, DMPApproxbin_edges = np.histogram(DMP_Approx_results, bins=bucket_boundaries)
 DMPWSNENEHistogram, DMPWSNEbin_edges = np.histogram(DMP_WSNE_results, bins=bucket_boundaries)
 FPApproxNEHistogram, FPApproxbin_edges = np.histogram(FP_Approx_results, bins=bucket_boundaries)
+print("FP Approx: ", FP_Approx_results)
+print("FP hist: ", FPApproxNEHistogram)
 FPWSNENEHistogram, FPWSNEbin_edges = np.histogram(FP_WSNE_results, bins=bucket_boundaries)
+print("FP WSNE: ", FP_WSNE_results)
+print("FP hist: ", FPWSNENEHistogram)
 FPUniformApproxNEHistogram, FPUniformApproxbin_edges = np.histogram(FP_Approx_uniform_results, bins=bucket_boundaries)
+print("FP uniform Approx: ", FP_Approx_uniform_results)
+print("FP uniform hist: ", FPUniformApproxNEHistogram)
 FPUniformWSNENEHistogram, FPUniformWSNEbin_edges = np.histogram(FP_WSNE_uniform_results, bins=bucket_boundaries)
+print("FP uniform WSNE: ", FP_Approx_results)
+print("FP uniform hist: ", FPUniformWSNENEHistogram)
 DELApproxNEHistogram, DELApproxbin_edges = np.histogram(DEL_Approx_results, bins=bucket_boundaries)
+print("DEL Approx: ", DEL_Approx_results)
+print("DEL hist: ", DELApproxNEHistogram)
 DELWSNENEHistogram, DELWSNEbin_edges = np.histogram(DEL_WSNE_results, bins=bucket_boundaries)
+print("DEL WSNE: ", DEL_WSNE_results)
+print("DEL hist: ", DELWSNENEHistogram)
 
 plt.bar(range(len(DMPApproxNEHistogram)), DMPApproxNEHistogram, align='center')
 plt.xticks(range(len(DMPApproxNEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
                                               'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
+plt.title('DMP ApproxNE')
+plt.show()
+
+plt.bar(range(len(DMPWSNENEHistogram)), DMPWSNENEHistogram, align='center')
+plt.xticks(range(len(DMPWSNENEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
+                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
+plt.title('DMP WNSE NE')
+plt.show()
+
+plt.bar(range(len(FPApproxNEHistogram)), FPApproxNEHistogram, align='center')
+plt.xticks(range(len(FPApproxNEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
+                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
+plt.title('FP ApproxNE')
+plt.show()
+
+plt.bar(range(len(FPWSNENEHistogram)), FPWSNENEHistogram, align='center')
+plt.xticks(range(len(FPWSNENEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
+                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
+plt.title('FP WSNE NE')
+plt.show()
+
+plt.bar(range(len(FPUniformApproxNEHistogram)), FPUniformApproxNEHistogram, align='center')
+plt.xticks(range(len(FPUniformApproxNEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
+                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
+plt.title('FP uniform ApproxNE')
+plt.show()
+
+plt.bar(range(len(FPUniformWSNENEHistogram)), FPUniformWSNENEHistogram, align='center')
+plt.xticks(range(len(FPUniformWSNENEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
+                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
+plt.title('FP uniform WSNE NE')
+plt.show()
+
+plt.bar(range(len(DELApproxNEHistogram)), DELApproxNEHistogram, align='center')
+plt.xticks(range(len(DELApproxNEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
+                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
+plt.title('DEL ApproxNE')
+plt.show()
+
+plt.bar(range(len(DELWSNENEHistogram)), DELWSNENEHistogram, align='center')
+plt.xticks(range(len(DELWSNENEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
+                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
+plt.title('DEL WSNE NE')
 plt.show()
