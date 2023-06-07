@@ -454,7 +454,7 @@ def solveZeroSumGame(m, n, A):
     x = chi[2:m + 2]
     y = chi[m + 2:m + n + 2]
 
-    # rint("Success in solving 0SUMLP for (X,-X) ?\t", zero_sum_res.success)
+    # print("Success in solving 0SUMLP for (X,-X) ?\t", zero_sum_res.success)
     # print("Message of the solver for 0SUMLP ?\t",zero_sum_res.message)
     # print("0SUmLP's objective value (additive-wsne guarantee) \t=\t",zero_sum_res.fun)
     # print("NE point for (X,-X) is ( x=",x.reshape([1,m])," , y=",y.reshape([1,n])," ).")
@@ -557,20 +557,27 @@ def computeApproximationGuarantees(m, n, R, C, x, y):
 
     support_x = np.nonzero(x)[0]
     support_y = np.nonzero(y)[0]
-
+    print("guarantees\nx is: ", x, "\ny is: ", y)
+    print("support x", support_x)
+    print("support y", support_y)
     while ((maxRy - epsAPPROX > xtRy) or (maxCtx - epsAPPROX > xtCy)):
         epsAPPROX = epsAPPROX + 0.01
 
-    max_Ry = np.max(R[support_x] @ y)
+    max_Ry = np.max(R @ y)
     min_Ry = np.min(R[support_x] @ y)
-    max_CTx = np.max(C.T[support_y] @ x)
+    max_CTx = np.max(C.T @ x)
     min_CTx = np.min(C.T[support_y] @ x)
-
-    while ((max_Ry - epsWSNE > min_Ry)):
+    print("R@y", R@y)
+    print("CT@x", x_trans @ C)
+    print("Max dot Ry: ", maxRy)
+    print("Max dot CTx: ", maxCtx)
+    print("MaxRy: ", max_Ry, "\nMinRy: ", min_Ry)
+    print("MaxCTx: ", max_CTx, "\nMinCTx: ", min_CTx)
+    while ((max_Ry - epsWSNE > min_Ry) or (max_CTx - epsWSNE > min_CTx)):
         epsWSNE = epsWSNE + 0.01
 
-    while ((max_CTx - epsWSNE > min_CTx)):
-        epsWSNE = epsWSNE + 0.01
+    #while ((max_CTx - epsWSNE > min_CTx)):
+     #   epsWSNE = epsWSNE + 0.01
 
     return (epsAPPROX, epsWSNE)
 
@@ -664,6 +671,7 @@ def approxNEConstructionDEL(m, n, R, C):
     x_col_trans = np.array(x_col).reshape(1, len(x_col))
     V_col = np.dot(x_col_trans, np.dot(C, y_col))
 
+    swap_flag = 0
     if (V_row < V_col):
         tempx_row = x_row
         tempy_row = y_row
@@ -677,14 +685,17 @@ def approxNEConstructionDEL(m, n, R, C):
         C = tempR
         m = n
         n = tempm
+        swap_flag = 1
+        print("Done that")
 
-    if (V_row <= 2 / 3):
-        x_final = x_row
+    if V_row <= 2/3:
+        x_final = x_col
         y_final = y_row
-
+        print("scenario 1")
     elif max((np.dot(np.array(x_row).reshape(1, len(x_row)), C)) <= 2 / 3):
         x_final = x_row
         y_final = y_row
+        print("scenario 2")
     else:
         j = np.dot(np.array(x_row).reshape(1, len(x_row)), C).index(
             max(np.dot(np.array(x_row).reshape(1, len(x_row)), C)))
@@ -695,8 +706,9 @@ def approxNEConstructionDEL(m, n, R, C):
         y_final = [0] * n
         x_final[index] = 1
         y_final[index] = 1
+        print("scenario 3")
 
-    if (V_row < V_col):
+    if swap_flag:
         tempR = R
         tempm = m
         R = C
@@ -896,7 +908,7 @@ def chooseExperiment(algorithm):
                     bcolors.ERROR + "ERROR MESSAGE MAIN 1: Invalid parameters were provided for the construction of the random game." + bcolors.ENDC)
                 exit()
 
-        drawBimatrix(m, n, R, C)
+        # drawBimatrix(m, n, R, C)
 
         # SEEKING FOR PNE IN THE GAME (R,C)...
         (i, j) = checkForPNE(m, n, R, C)
@@ -920,12 +932,6 @@ def chooseExperiment(algorithm):
             DMP_results_R.append(R)
             DMP_results_C.append(C)
             DMPx, DMPy = interpretReducedStrategiesForOriginalGame(x, y, R, C, reduced_R, reduced_C)
-            print(bcolors.MSG + PLUSLINE)
-            print("\tConstructed solution for DMP:")
-            print(MINUSLINE)
-            print("\tDMPx =", DMPx, "\n\tDMPy =", DMPy)
-            print("\tDMPepsAPPROX =", DMPepsAPPROX, ".\tDMPepsWSNE =", DMPepsWSNE, "." + bcolors.ENDC)
-            print(PLUSLINE + bcolors.ENDC)
 
         if algorithm.upper() == 'FP' or algorithm.upper() == 'ALL':
             ### EXECUTING FICTITIOUS PLAY ALGORITHM...
@@ -940,115 +946,109 @@ def chooseExperiment(algorithm):
             FP_uniform_R.append(R)
             FP_uniform_C.append(C)
             FPx, FPy = interpretReducedStrategiesForOriginalGame(x, y, R, C, reduced_R, reduced_C)
-            print(bcolors.MSG + PLUSLINE)
-            print("\tConstructed solution for FICTITIOUS PLAY:")
-            print(MINUSLINE)
-            print("\tFPx =", FPx, "\n\tFPy =", FPy)
-            print("\tFPepsAPPROX =", FPepsAPPROX, ".\tFPepsWSNE =", FPepsWSNE, ".")
-            print(PLUSLINE + bcolors.ENDC)
 
         if algorithm.upper() == 'DEL' or algorithm.upper() == 'ALL':
             ### EXECUTING DEL ALGORITHM...
             x, y, DELepsAPPROX, DELepsWSNE = approxNEConstructionDEL(reduced_m, reduced_n, reduced_R, reduced_C)
+            if DELepsWSNE >= 0.67:
+                drawBimatrix(reduced_m, reduced_n, reduced_R, reduced_C)
+                print("x is that: ", x, "\ny is that: ", y)
             DEL_Approx_results.append(round(DELepsAPPROX, 4))
             DEL_WSNE_results.append(round(DELepsWSNE, 4))
             DEL_results_R.append(R)
             DEL_results_C.append(C)
             DELx, DELy = interpretReducedStrategiesForOriginalGame(x, y, R, C, reduced_R, reduced_C)
-            print(bcolors.MSG + PLUSLINE)
-            print("\tConstructed solution for DEL:")
-            print(MINUSLINE)
-            print("\tDELx =", DELx, "\n\tDELy =", DELy)
-            print("\tDELepsAPPROX =", DELepsAPPROX, ".\tDELepsWSNE =", DELepsWSNE, ".")
-            print(PLUSLINE + bcolors.ENDC)
 
-    DMP_worst_R = []
-    DMP_worst_C = []
-    DMP_approx_sorted = sorted(DMP_Approx_results, reverse=True)
-    DMP_max_values = DMP_approx_sorted[:2]
-    index1 = DMP_Approx_results.index(DMP_max_values[0])
-    index2 = DMP_Approx_results.index(DMP_max_values[1])
-    DMP_worst_R.append(DMP_results_R[index1])
-    DMP_worst_R.append(DMP_results_R[index2])
-    DMP_worst_C.append(DMP_results_C[index1])
-    DMP_worst_C.append(DMP_results_C[index2])
+    if algorithm.upper() == 'DMP' or algorithm.upper() == 'ALL':
+        DMP_worst_R = []
+        DMP_worst_C = []
+        DMP_approx_sorted = sorted(DMP_Approx_results, reverse=True)
+        DMP_max_values = DMP_approx_sorted[:2]
+        index1 = DMP_Approx_results.index(DMP_max_values[0])
+        index2 = DMP_Approx_results.index(DMP_max_values[1])
+        DMP_worst_R.append(DMP_results_R[index1])
+        DMP_worst_R.append(DMP_results_R[index2])
+        DMP_worst_C.append(DMP_results_C[index1])
+        DMP_worst_C.append(DMP_results_C[index2])
 
-    DMP_WSNE_worst_R = []
-    DMP_WSNE_worst_C = []
-    DMP_WSNE_sorted = sorted(DMP_WSNE_results, reverse=True)
-    DMP_WSNE_max_values = DMP_WSNE_sorted[:2]
-    index1 = DMP_WSNE_results.index(DMP_WSNE_max_values[0])
-    index2 = DMP_WSNE_results.index(DMP_WSNE_max_values[1])
-    DMP_WSNE_worst_R.append(DMP_results_R[index1])
-    DMP_WSNE_worst_R.append(DMP_results_R[index2])
-    DMP_WSNE_worst_C.append(DMP_results_C[index1])
-    DMP_WSNE_worst_C.append(DMP_results_C[index2])
+        DMP_WSNE_worst_R = []
+        DMP_WSNE_worst_C = []
+        DMP_WSNE_sorted = sorted(DMP_WSNE_results, reverse=True)
+        DMP_WSNE_max_values = DMP_WSNE_sorted[:2]
+        index1 = DMP_WSNE_results.index(DMP_WSNE_max_values[0])
+        index2 = DMP_WSNE_results.index(DMP_WSNE_max_values[1])
+        DMP_WSNE_worst_R.append(DMP_results_R[index1])
+        DMP_WSNE_worst_R.append(DMP_results_R[index2])
+        DMP_WSNE_worst_C.append(DMP_results_C[index1])
+        DMP_WSNE_worst_C.append(DMP_results_C[index2])
 
-    FP_worst_R = []
-    FP_worst_C = []
-    FP_approx_sorted = sorted(FP_Approx_results, reverse=True)
-    FP_max_values = FP_approx_sorted[:2]
-    index1 = FP_Approx_results.index(FP_max_values[0])
-    index2 = FP_Approx_results.index(FP_max_values[1])
-    FP_worst_R.append(FP_results_R[index1])
-    FP_worst_R.append(FP_results_R[index2])
-    FP_worst_C.append(FP_results_C[index1])
-    FP_worst_C.append(FP_results_C[index2])
+    if algorithm.upper() == 'FP' or algorithm.upper() == 'ALL':
+        FP_worst_R = []
+        FP_worst_C = []
+        FP_approx_sorted = sorted(FP_Approx_results, reverse=True)
+        FP_max_values = FP_approx_sorted[:2]
+        index1 = FP_Approx_results.index(FP_max_values[0])
+        index2 = FP_Approx_results.index(FP_max_values[1])
+        FP_worst_R.append(FP_results_R[index1])
+        FP_worst_R.append(FP_results_R[index2])
+        FP_worst_C.append(FP_results_C[index1])
+        FP_worst_C.append(FP_results_C[index2])
 
-    FP_WSNE_worst_R = []
-    FP_WSNE_worst_C = []
-    FP_WSNE_sorted = sorted(FP_WSNE_results, reverse=True)
-    FP_WSNE_max_values = FP_WSNE_sorted[:2]
-    index1 = FP_WSNE_results.index(FP_WSNE_max_values[0])
-    index2 = FP_WSNE_results.index(FP_WSNE_max_values[1])
-    FP_WSNE_worst_R.append(FP_results_R[index1])
-    FP_WSNE_worst_R.append(FP_results_R[index2])
-    FP_WSNE_worst_C.append(FP_results_C[index1])
-    FP_WSNE_worst_C.append(FP_results_C[index2])
+        FP_WSNE_worst_R = []
+        FP_WSNE_worst_C = []
+        FP_WSNE_sorted = sorted(FP_WSNE_results, reverse=True)
+        FP_WSNE_max_values = FP_WSNE_sorted[:2]
+        index1 = FP_WSNE_results.index(FP_WSNE_max_values[0])
+        index2 = FP_WSNE_results.index(FP_WSNE_max_values[1])
+        FP_WSNE_worst_R.append(FP_results_R[index1])
+        FP_WSNE_worst_R.append(FP_results_R[index2])
+        FP_WSNE_worst_C.append(FP_results_C[index1])
+        FP_WSNE_worst_C.append(FP_results_C[index2])
 
-    FP_uniform_worst_R = []
-    FP_uniform_worst_C = []
-    FP_uniform_approx_sorted = sorted(FP_Approx_uniform_results, reverse=True)
-    FP_uniform_max_values = FP_uniform_approx_sorted[:2]
-    index1 = FP_Approx_uniform_results.index(FP_uniform_max_values[0])
-    index2 = FP_Approx_uniform_results.index(FP_uniform_max_values[1])
-    FP_uniform_worst_R.append(FP_uniform_R[index1])
-    FP_uniform_worst_R.append(FP_uniform_R[index2])
-    FP_uniform_worst_C.append(FP_uniform_C[index1])
-    FP_uniform_worst_C.append(FP_uniform_C[index2])
+        FP_uniform_worst_R = []
+        FP_uniform_worst_C = []
+        FP_uniform_approx_sorted = sorted(FP_Approx_uniform_results, reverse=True)
+        FP_uniform_max_values = FP_uniform_approx_sorted[:2]
+        index1 = FP_Approx_uniform_results.index(FP_uniform_max_values[0])
+        index2 = FP_Approx_uniform_results.index(FP_uniform_max_values[1])
+        FP_uniform_worst_R.append(FP_uniform_R[index1])
+        FP_uniform_worst_R.append(FP_uniform_R[index2])
+        FP_uniform_worst_C.append(FP_uniform_C[index1])
+        FP_uniform_worst_C.append(FP_uniform_C[index2])
 
-    FP_uniform_WSNE_worst_R = []
-    FP_uniform_WSNE_worst_C = []
-    FP_uniform_WSNE_sorted = sorted(FP_WSNE_uniform_results, reverse=True)
-    FP_uniform_WSNE_max_values = FP_uniform_WSNE_sorted[:2]
-    index1 = FP_WSNE_uniform_results.index(FP_uniform_WSNE_max_values[0])
-    index2 = FP_WSNE_uniform_results.index(FP_uniform_WSNE_max_values[1])
-    FP_uniform_WSNE_worst_R.append(FP_uniform_R[index1])
-    FP_uniform_WSNE_worst_R.append(FP_uniform_R[index2])
-    FP_uniform_WSNE_worst_C.append(FP_uniform_C[index1])
-    FP_uniform_WSNE_worst_C.append(FP_uniform_C[index2])
+        FP_uniform_WSNE_worst_R = []
+        FP_uniform_WSNE_worst_C = []
+        FP_uniform_WSNE_sorted = sorted(FP_WSNE_uniform_results, reverse=True)
+        FP_uniform_WSNE_max_values = FP_uniform_WSNE_sorted[:2]
+        index1 = FP_WSNE_uniform_results.index(FP_uniform_WSNE_max_values[0])
+        index2 = FP_WSNE_uniform_results.index(FP_uniform_WSNE_max_values[1])
+        FP_uniform_WSNE_worst_R.append(FP_uniform_R[index1])
+        FP_uniform_WSNE_worst_R.append(FP_uniform_R[index2])
+        FP_uniform_WSNE_worst_C.append(FP_uniform_C[index1])
+        FP_uniform_WSNE_worst_C.append(FP_uniform_C[index2])
 
-    DEL_worst_R = []
-    DEL_worst_C = []
-    DEL_approx_sorted = sorted(DEL_Approx_results, reverse=True)
-    DEL_max_values = DEL_approx_sorted[:2]
-    index1 = DEL_Approx_results.index(DEL_max_values[0])
-    index2 = DEL_Approx_results.index(DEL_max_values[1])
-    DEL_worst_R.append(DEL_results_R[index1])
-    DEL_worst_R.append(DEL_results_R[index2])
-    DEL_worst_C.append(DEL_results_C[index1])
-    DEL_worst_C.append(DEL_results_C[index2])
+    if algorithm.upper() == 'DEL' or algorithm.upper() == 'ALL':
+        DEL_worst_R = []
+        DEL_worst_C = []
+        DEL_approx_sorted = sorted(DEL_Approx_results, reverse=True)
+        DEL_max_values = DEL_approx_sorted[:2]
+        index1 = DEL_Approx_results.index(DEL_max_values[0])
+        index2 = DEL_Approx_results.index(DEL_max_values[1])
+        DEL_worst_R.append(DEL_results_R[index1])
+        DEL_worst_R.append(DEL_results_R[index2])
+        DEL_worst_C.append(DEL_results_C[index1])
+        DEL_worst_C.append(DEL_results_C[index2])
 
-    DEL_WSNE_worst_R = []
-    DEL_WSNE_worst_C = []
-    DEL_WSNE_sorted = sorted(DEL_WSNE_results, reverse=True)
-    DEL_WSNE_max_values = DEL_WSNE_sorted[:2]
-    index1 = DEL_WSNE_results.index(DEL_WSNE_max_values[0])
-    index2 = DEL_WSNE_results.index(DEL_WSNE_max_values[1])
-    DEL_WSNE_worst_R.append(DEL_results_R[index1])
-    DEL_WSNE_worst_R.append(DEL_results_R[index2])
-    DEL_WSNE_worst_C.append(DEL_results_C[index1])
-    DEL_WSNE_worst_C.append(DEL_results_C[index2])
+        DEL_WSNE_worst_R = []
+        DEL_WSNE_worst_C = []
+        DEL_WSNE_sorted = sorted(DEL_WSNE_results, reverse=True)
+        DEL_WSNE_max_values = DEL_WSNE_sorted[:2]
+        index1 = DEL_WSNE_results.index(DEL_WSNE_max_values[0])
+        index2 = DEL_WSNE_results.index(DEL_WSNE_max_values[1])
+        DEL_WSNE_worst_R.append(DEL_results_R[index1])
+        DEL_WSNE_worst_R.append(DEL_results_R[index2])
+        DEL_WSNE_worst_C.append(DEL_results_C[index1])
+        DEL_WSNE_worst_C.append(DEL_results_C[index2])
 
     # saving the files
     current_dir = os.getcwd()
