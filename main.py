@@ -6,7 +6,6 @@ from numpy.linalg import matrix_rank
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from scipy.optimize import linprog
-
 import os
 
 
@@ -473,8 +472,6 @@ def deleteStrictlyDominatedStrategies(m, n, R, C):
              ''' + bcolors.ENDC)
     reduced_R = R
     reduced_C = C
-    Row_to_delete = [0] * m
-    Column_to_delete = [0] * n
 
     # get the index of (0,*) rows
     rows_index = []
@@ -489,12 +486,12 @@ def deleteStrictlyDominatedStrategies(m, n, R, C):
             columns_index.append(c)
 
     # delete rows contained in rows_index
-    for r in rows_index:
+    for r in reversed(rows_index):
         reduced_R = np.delete(R, r, axis=0)
         reduced_C = np.delete(C, r, axis=0)
 
     # delete columns contained in columns_index
-    for c in columns_index:
+    for c in reversed(columns_index):
         reduced_C = np.delete(reduced_C, c, axis=1)
         reduced_R = np.delete(reduced_R, c, axis=1)
 
@@ -558,17 +555,22 @@ def computeApproximationGuarantees(m, n, R, C, x, y):
     Cy = np.dot(C, y)
     xtCy = np.dot(x_trans, Cy)
 
+    support_x = np.nonzero(x)[0]
+    support_y = np.nonzero(y)[0]
+
     while ((maxRy - epsAPPROX > xtRy) or (maxCtx - epsAPPROX > xtCy)):
         epsAPPROX = epsAPPROX + 0.01
 
-    for v in range(m):
-        if (x[v] > 0):
-            while ((maxRy - epsWSNE > np.dot(R, y)[v])):
-                epsWSNE = epsWSNE + 0.01
-    for b in range(n):
-        if (y[b] > 0):
-            while ((maxCtx - epsWSNE > np.dot(C_trans, x)[b])):
-                epsWSNE = epsWSNE + 0.01
+    max_Ry = np.max(R[support_x] @ y)
+    min_Ry = np.min(R[support_x] @ y)
+    max_CTx = np.max(C.T[support_y] @ x)
+    min_CTx = np.min(C.T[support_y] @ x)
+
+    while ((max_Ry - epsWSNE > min_Ry)):
+        epsWSNE = epsWSNE + 0.01
+
+    while ((max_CTx - epsWSNE > min_CTx)):
+        epsWSNE = epsWSNE + 0.01
 
     return (epsAPPROX, epsWSNE)
 
@@ -579,7 +581,6 @@ def approxNEConstructionDMP(m, n, R, C):
     PRE:    A bimatrix game, described by the two payoff matrices, with payoff values in [0,1].
     POST:   A profile of strategies (x,y) produced by the DMP algorithm.''' + bcolors.ENDC)
     effC = [0] * n
-    effR = [0] * m
     y = [0] * n
 
     x_trans = generate_randomnumbers(m)
@@ -614,7 +615,7 @@ def approxNEConstructionFP(m, n, R, C):
     row_beliefs[0] = 1
     column_beliefs[0] = 1
 
-    for i in range(1, 20):
+    for i in range(1, 100):
         row_best_response = np.argmax(np.dot(column_beliefs, R.T))
         col_best_response = np.argmax(np.dot(row_beliefs, C))
         row_beliefs = np.zeros(m)
@@ -625,7 +626,7 @@ def approxNEConstructionFP(m, n, R, C):
     uniform_row_beliefs = np.ones(m) / m
     uniform_column_beliefs = np.ones(n) / n
 
-    for i in range(1, 20):
+    for i in range(1, 100):
         uniform_row_best_response = np.max(np.dot(uniform_column_beliefs, R.T))
         uniform_col_best_response = np.max(np.dot(uniform_row_beliefs, C))
         row_max_indexes = np.where(np.dot(uniform_column_beliefs, R.T) == uniform_row_best_response)[0]
@@ -641,12 +642,13 @@ def approxNEConstructionFP(m, n, R, C):
 
     row_beliefs = np.array(row_beliefs).reshape(len(row_beliefs), 1)
     uniform_row_beliefs = np.array(uniform_row_beliefs).reshape(len(uniform_row_beliefs), 1)
-    (epsAPPROX, epsWSNE) = computeApproximationGuarantees(m, n, R, C, row_beliefs, column_beliefs)
-    (uniform_epsAPPROX, uniform_epsWSNE) = computeApproximationGuarantees(m, n, R, C, uniform_row_beliefs,
+
+    epsAPPROX, epsWSNE = computeApproximationGuarantees(m, n, R, C, row_beliefs, column_beliefs)
+    uniform_epsAPPROX, uniform_epsWSNE = computeApproximationGuarantees(m, n, R, C, uniform_row_beliefs,
                                                                           uniform_column_beliefs)
     return (
-    row_beliefs, column_beliefs, uniform_row_beliefs, uniform_column_beliefs, epsAPPROX, epsWSNE, uniform_epsAPPROX,
-    uniform_epsWSNE)
+        row_beliefs, column_beliefs, uniform_row_beliefs, uniform_column_beliefs, epsAPPROX, epsWSNE, uniform_epsAPPROX,
+        uniform_epsWSNE)
 
 
 def approxNEConstructionDEL(m, n, R, C):
@@ -656,13 +658,9 @@ def approxNEConstructionDEL(m, n, R, C):
     POST:   A profile of strategies (x,y) produced by the DEL algorithm.''' + bcolors.ENDC)
 
     x_row, y_row = solveZeroSumGame(m, n, R)  # this example solves (R,-R)
-    print(x_row)
-    print(y_row)
     x_row_trans = np.array(x_row).reshape(1, len(x_row))
     V_row = np.dot(x_row_trans, np.dot(R, y_row))
     x_col, y_col = solveZeroSumGame(m, n, C)  # this example solves (C,-C)
-    print(x_col)
-    print(y_col)
     x_col_trans = np.array(x_col).reshape(1, len(x_col))
     V_col = np.dot(x_col_trans, np.dot(C, y_col))
 
@@ -681,7 +679,7 @@ def approxNEConstructionDEL(m, n, R, C):
         n = tempm
 
     if (V_row <= 2 / 3):
-        x_final = x_col
+        x_final = x_row
         y_final = y_row
 
     elif max((np.dot(np.array(x_row).reshape(1, len(x_row)), C)) <= 2 / 3):
@@ -845,6 +843,598 @@ def print_LAB2_preamble():
 
     input("Press ENTER to continue...")
 
+def chooseExperiment(algorithm):
+    screen_clear()
+
+    m, n = determineGameDimensions()
+
+    print("Choose values of G10 and G01 for each experiment:")
+    print("Experiment P1: G10 = 20, G01 = 20")
+    print("Experiment P2: G10 = 20, G01 = 50")
+    print("Experiment P3: G10 = 20, G01 = 70")
+    print("Experiment P4: G10 = 35, G01 = 35")
+    G10, G01 = determineNumGoodCellsForPlayers(m, n)
+
+    numOfRandomGamesToSolve = determineNumRandomGamesToSolve()
+
+    DMP_Approx_results = []
+    DMP_WSNE_results = []
+    DMP_results_R = []
+    DMP_results_C = []
+    DEL_Approx_results = []
+    DEL_WSNE_results = []
+    DEL_results_R = []
+    DEL_results_C = []
+    FP_Approx_results = []
+    FP_WSNE_results = []
+    FP_results_R = []
+    FP_results_C = []
+    FP_Approx_uniform_results = []
+    FP_WSNE_uniform_results = []
+    FP_uniform_R = []
+    FP_uniform_C = []
+
+    for i in range(numOfRandomGamesToSolve):
+        earliestColFor01 = 0
+        earliestRowFor10 = 0
+
+        EXITCODE = -5
+        numOfAttempts = 0
+
+        # TRY GETTING A NEW RANDOM GAME
+        # REPEAT UNTIL EXITCODE = 0, ie, a valid game was constructed.
+        # NOTE: EXITCODE in {-1,-2,-3} indicates invalid parameters and exits the program)
+        while EXITCODE < 0:
+            # EXIT CODE = -4 ==> No problem with parameters, only BAD LUCK, TOO MANY 01-elements within 10-eligible area
+            # EXIT CODE = -5 ==> No problem with parameters, only BAD LUCK, ALL-01 column exists within 10-eligible area
+            numOfAttempts += 1
+            print("Attempt #" + str(numOfAttempts) + " to construct a random game...")
+            EXITCODE, R, C = generate_winlose_game_without_pne(m, n, G01, G10, earliestColFor01, earliestRowFor10)
+
+            if EXITCODE in [-1, -2, -3]:
+                print(
+                    bcolors.ERROR + "ERROR MESSAGE MAIN 1: Invalid parameters were provided for the construction of the random game." + bcolors.ENDC)
+                exit()
+
+        drawBimatrix(m, n, R, C)
+
+        # SEEKING FOR PNE IN THE GAME (R,C)...
+        (i, j) = checkForPNE(m, n, R, C)
+
+        if (i, j) != (-1, -1):
+            print(bcolors.MSG + "A pure NE (", i, ",", j, ") was discovered for (R,C)." + bcolors.ENDC)
+            exit()
+        else:
+            print(bcolors.MSG + "No pure NE exists for (R,C). Looking for an approximate NE point..." + bcolors.ENDC)
+
+        reduced_m, reduced_n, reduced_R, reduced_C = deleteStrictlyDominatedStrategies(m, n, R, C)
+
+        print(bcolors.MSG + "Reduced bimatrix, after removal of strictly dominated actions:")
+        drawBimatrix(reduced_m, reduced_n, reduced_R, reduced_C)
+
+        if algorithm.upper() == 'DMP' or algorithm.upper() == 'ALL':
+            ### EXECUTING DMP ALGORITHM...
+            x, y, DMPepsAPPROX, DMPepsWSNE = approxNEConstructionDMP(reduced_m, reduced_n, reduced_R, reduced_C)
+            DMP_Approx_results.append(round(DMPepsAPPROX, 4))
+            DMP_WSNE_results.append(round(DMPepsWSNE, 4))
+            DMP_results_R.append(R)
+            DMP_results_C.append(C)
+            DMPx, DMPy = interpretReducedStrategiesForOriginalGame(x, y, R, C, reduced_R, reduced_C)
+            print(bcolors.MSG + PLUSLINE)
+            print("\tConstructed solution for DMP:")
+            print(MINUSLINE)
+            print("\tDMPx =", DMPx, "\n\tDMPy =", DMPy)
+            print("\tDMPepsAPPROX =", DMPepsAPPROX, ".\tDMPepsWSNE =", DMPepsWSNE, "." + bcolors.ENDC)
+            print(PLUSLINE + bcolors.ENDC)
+
+        if algorithm.upper() == 'FP' or algorithm.upper() == 'ALL':
+            ### EXECUTING FICTITIOUS PLAY ALGORITHM...
+            x, y, x_uniform, y_uniform, FPepsAPPROX, FPepsWSNE, uniformFPepsAPPROX, uniformFPepsWNSE = approxNEConstructionFP(
+                reduced_m, reduced_n, reduced_R, reduced_C)
+            FP_Approx_results.append(round(FPepsAPPROX, 4))
+            FP_WSNE_results.append(round(FPepsWSNE, 4))
+            FP_results_R.append(R)
+            FP_results_C.append(C)
+            FP_Approx_uniform_results.append(round(uniformFPepsAPPROX, 4))
+            FP_WSNE_uniform_results.append(round(uniformFPepsWNSE, 4))
+            FP_uniform_R.append(R)
+            FP_uniform_C.append(C)
+            FPx, FPy = interpretReducedStrategiesForOriginalGame(x, y, R, C, reduced_R, reduced_C)
+            print(bcolors.MSG + PLUSLINE)
+            print("\tConstructed solution for FICTITIOUS PLAY:")
+            print(MINUSLINE)
+            print("\tFPx =", FPx, "\n\tFPy =", FPy)
+            print("\tFPepsAPPROX =", FPepsAPPROX, ".\tFPepsWSNE =", FPepsWSNE, ".")
+            print(PLUSLINE + bcolors.ENDC)
+
+        if algorithm.upper() == 'DEL' or algorithm.upper() == 'ALL':
+            ### EXECUTING DEL ALGORITHM...
+            x, y, DELepsAPPROX, DELepsWSNE = approxNEConstructionDEL(reduced_m, reduced_n, reduced_R, reduced_C)
+            DEL_Approx_results.append(round(DELepsAPPROX, 4))
+            DEL_WSNE_results.append(round(DELepsWSNE, 4))
+            DEL_results_R.append(R)
+            DEL_results_C.append(C)
+            DELx, DELy = interpretReducedStrategiesForOriginalGame(x, y, R, C, reduced_R, reduced_C)
+            print(bcolors.MSG + PLUSLINE)
+            print("\tConstructed solution for DEL:")
+            print(MINUSLINE)
+            print("\tDELx =", DELx, "\n\tDELy =", DELy)
+            print("\tDELepsAPPROX =", DELepsAPPROX, ".\tDELepsWSNE =", DELepsWSNE, ".")
+            print(PLUSLINE + bcolors.ENDC)
+
+    DMP_worst_R = []
+    DMP_worst_C = []
+    DMP_approx_sorted = sorted(DMP_Approx_results, reverse=True)
+    DMP_max_values = DMP_approx_sorted[:2]
+    index1 = DMP_Approx_results.index(DMP_max_values[0])
+    index2 = DMP_Approx_results.index(DMP_max_values[1])
+    DMP_worst_R.append(DMP_results_R[index1])
+    DMP_worst_R.append(DMP_results_R[index2])
+    DMP_worst_C.append(DMP_results_C[index1])
+    DMP_worst_C.append(DMP_results_C[index2])
+
+    DMP_WSNE_worst_R = []
+    DMP_WSNE_worst_C = []
+    DMP_WSNE_sorted = sorted(DMP_WSNE_results, reverse=True)
+    DMP_WSNE_max_values = DMP_WSNE_sorted[:2]
+    index1 = DMP_WSNE_results.index(DMP_WSNE_max_values[0])
+    index2 = DMP_WSNE_results.index(DMP_WSNE_max_values[1])
+    DMP_WSNE_worst_R.append(DMP_results_R[index1])
+    DMP_WSNE_worst_R.append(DMP_results_R[index2])
+    DMP_WSNE_worst_C.append(DMP_results_C[index1])
+    DMP_WSNE_worst_C.append(DMP_results_C[index2])
+
+    FP_worst_R = []
+    FP_worst_C = []
+    FP_approx_sorted = sorted(FP_Approx_results, reverse=True)
+    FP_max_values = FP_approx_sorted[:2]
+    index1 = FP_Approx_results.index(FP_max_values[0])
+    index2 = FP_Approx_results.index(FP_max_values[1])
+    FP_worst_R.append(FP_results_R[index1])
+    FP_worst_R.append(FP_results_R[index2])
+    FP_worst_C.append(FP_results_C[index1])
+    FP_worst_C.append(FP_results_C[index2])
+
+    FP_WSNE_worst_R = []
+    FP_WSNE_worst_C = []
+    FP_WSNE_sorted = sorted(FP_WSNE_results, reverse=True)
+    FP_WSNE_max_values = FP_WSNE_sorted[:2]
+    index1 = FP_WSNE_results.index(FP_WSNE_max_values[0])
+    index2 = FP_WSNE_results.index(FP_WSNE_max_values[1])
+    FP_WSNE_worst_R.append(FP_results_R[index1])
+    FP_WSNE_worst_R.append(FP_results_R[index2])
+    FP_WSNE_worst_C.append(FP_results_C[index1])
+    FP_WSNE_worst_C.append(FP_results_C[index2])
+
+    FP_uniform_worst_R = []
+    FP_uniform_worst_C = []
+    FP_uniform_approx_sorted = sorted(FP_Approx_uniform_results, reverse=True)
+    FP_uniform_max_values = FP_uniform_approx_sorted[:2]
+    index1 = FP_Approx_uniform_results.index(FP_uniform_max_values[0])
+    index2 = FP_Approx_uniform_results.index(FP_uniform_max_values[1])
+    FP_uniform_worst_R.append(FP_uniform_R[index1])
+    FP_uniform_worst_R.append(FP_uniform_R[index2])
+    FP_uniform_worst_C.append(FP_uniform_C[index1])
+    FP_uniform_worst_C.append(FP_uniform_C[index2])
+
+    FP_uniform_WSNE_worst_R = []
+    FP_uniform_WSNE_worst_C = []
+    FP_uniform_WSNE_sorted = sorted(FP_WSNE_uniform_results, reverse=True)
+    FP_uniform_WSNE_max_values = FP_uniform_WSNE_sorted[:2]
+    index1 = FP_WSNE_uniform_results.index(FP_uniform_WSNE_max_values[0])
+    index2 = FP_WSNE_uniform_results.index(FP_uniform_WSNE_max_values[1])
+    FP_uniform_WSNE_worst_R.append(FP_uniform_R[index1])
+    FP_uniform_WSNE_worst_R.append(FP_uniform_R[index2])
+    FP_uniform_WSNE_worst_C.append(FP_uniform_C[index1])
+    FP_uniform_WSNE_worst_C.append(FP_uniform_C[index2])
+
+    DEL_worst_R = []
+    DEL_worst_C = []
+    DEL_approx_sorted = sorted(DEL_Approx_results, reverse=True)
+    DEL_max_values = DEL_approx_sorted[:2]
+    index1 = DEL_Approx_results.index(DEL_max_values[0])
+    index2 = DEL_Approx_results.index(DEL_max_values[1])
+    DEL_worst_R.append(DEL_results_R[index1])
+    DEL_worst_R.append(DEL_results_R[index2])
+    DEL_worst_C.append(DEL_results_C[index1])
+    DEL_worst_C.append(DEL_results_C[index2])
+
+    DEL_WSNE_worst_R = []
+    DEL_WSNE_worst_C = []
+    DEL_WSNE_sorted = sorted(DEL_WSNE_results, reverse=True)
+    DEL_WSNE_max_values = DEL_WSNE_sorted[:2]
+    index1 = DEL_WSNE_results.index(DEL_WSNE_max_values[0])
+    index2 = DEL_WSNE_results.index(DEL_WSNE_max_values[1])
+    DEL_WSNE_worst_R.append(DEL_results_R[index1])
+    DEL_WSNE_worst_R.append(DEL_results_R[index2])
+    DEL_WSNE_worst_C.append(DEL_results_C[index1])
+    DEL_WSNE_worst_C.append(DEL_results_C[index2])
+
+    # saving the files
+    current_dir = os.getcwd()
+    new_folder = "EXPERIMENTS"
+    new_folder_path = os.path.join(current_dir, new_folder)
+    if not os.path.exists(new_folder_path):
+        os.mkdir(new_folder_path)
+
+    # make the P1-P4 paths and dirs
+    P1_path = os.path.join(new_folder_path, "P1")
+    P2_path = os.path.join(new_folder_path, "P2")
+    P3_path = os.path.join(new_folder_path, "P3")
+    P4_path = os.path.join(new_folder_path, "P4")
+
+    if not os.path.exists(P1_path):
+        os.mkdir(P1_path)
+    if not os.path.exists(P2_path):
+        os.mkdir(P2_path)
+    if not os.path.exists(P3_path):
+        os.mkdir(P3_path)
+    if not os.path.exists(P4_path):
+        os.mkdir(P4_path)
+
+    # Define the boundaries for the buckets
+    bucket_boundaries = [0.000, 0.101, 0.201, 0.301, 0.401, 0.501, 0.601, 0.701, 0.801, 0.901, 1.001]
+
+    # Compute the histogram
+    DMPApproxNEHistogram, DMPApproxbin_edges = np.histogram(DMP_Approx_results, bins=bucket_boundaries)
+    DMPWSNENEHistogram, DMPWSNEbin_edges = np.histogram(DMP_WSNE_results, bins=bucket_boundaries)
+    FPApproxNEHistogram, FPApproxbin_edges = np.histogram(FP_Approx_results, bins=bucket_boundaries)
+    FPWSNENEHistogram, FPWSNEbin_edges = np.histogram(FP_WSNE_results, bins=bucket_boundaries)
+    FPUniformApproxNEHistogram, FPUniformApproxbin_edges = np.histogram(FP_Approx_uniform_results,
+                                                                        bins=bucket_boundaries)
+    FPUniformWSNENEHistogram, FPUniformWSNEbin_edges = np.histogram(FP_WSNE_uniform_results, bins=bucket_boundaries)
+    DELApproxNEHistogram, DELApproxbin_edges = np.histogram(DEL_Approx_results, bins=bucket_boundaries)
+    DELWSNENEHistogram, DELWSNEbin_edges = np.histogram(DEL_WSNE_results, bins=bucket_boundaries)
+
+    if algorithm.upper() == 'DMP' or algorithm.upper() == 'ALL':
+        plt.bar(range(len(DMPApproxNEHistogram)), DMPApproxNEHistogram, align='center')
+        plt.xticks(range(len(DMPApproxNEHistogram)),
+                   ['0.0,0.1', '0.1,0.2', '0.2,0.3', '0.3,0.4', '0.4,0.5', '0.5,0.6',
+                    '0.6,0.7', '0.7,0.8', '0.8,0.9', '0.9,1.0'])
+        plt.title('DMP ApproxNE')
+        file_name = "DMPApproxNEHist.jpg"
+        if G10 == 20 and G01 == 20:
+            plt.savefig(P1_path + "/" + file_name)
+        elif G10 == 20 and G01 == 50:
+            plt.savefig(P2_path + "/" + file_name)
+        elif G10 == 20 and G01 == 70:
+            plt.savefig(P3_path + "/" + file_name)
+        elif G10 == 35 and G01 == 35:
+            plt.savefig(P4_path + "/" + file_name)
+        plt.show()
+        plt.close()
+
+        plt.bar(range(len(DMPWSNENEHistogram)), DMPWSNENEHistogram, align='center')
+        plt.xticks(range(len(DMPWSNENEHistogram)),
+                   ['0.0,0.1', '0.1,0.2', '0.2,0.3', '0.3,0.4', '0.4,0.5', '0.5,0.6',
+                    '0.6,0.7', '0.7,0.8', '0.8,0.9', '0.9,1.0'])
+        plt.title('DMP WNSE NE')
+        file_name = "DMPWSNENEHist.jpg"
+        if G10 == 20 and G01 == 20:
+            plt.savefig(P1_path + "/" + file_name)
+        elif G10 == 20 and G01 == 50:
+            plt.savefig(P2_path + "/" + file_name)
+        elif G10 == 20 and G01 == 70:
+            plt.savefig(P3_path + "/" + file_name)
+        elif G10 == 35 and G01 == 35:
+            plt.savefig(P4_path + "/" + file_name)
+        plt.show()
+        plt.close()
+
+    if algorithm.upper() == 'FP' or algorithm.upper() == 'ALL':
+        plt.bar(range(len(FPApproxNEHistogram)), FPApproxNEHistogram, align='center')
+        plt.xticks(range(len(FPApproxNEHistogram)),
+                   ['0.0,0.1', '0.1,0.2', '0.2,0.3', '0.3,0.4', '0.4,0.5', '0.5,0.6',
+                    '0.6,0.7', '0.7,0.8', '0.8,0.9', '0.9,1.0'])
+        plt.title('FP ApproxNE')
+        file_name = "FPApproxNEHist.jpg"
+        if G10 == 20 and G01 == 20:
+            plt.savefig(P1_path + "/" + file_name)
+        elif G10 == 20 and G01 == 50:
+            plt.savefig(P2_path + "/" + file_name)
+        elif G10 == 20 and G01 == 70:
+            plt.savefig(P3_path + "/" + file_name)
+        elif G10 == 35 and G01 == 35:
+            plt.savefig(P4_path + "/" + file_name)
+        plt.show()
+        plt.close()
+
+        plt.bar(range(len(FPWSNENEHistogram)), FPWSNENEHistogram, align='center')
+        plt.xticks(range(len(FPWSNENEHistogram)),
+                   ['0.0,0.1', '0.1,0.2', '0.2,0.3', '0.3,0.4', '0.4,0.5', '0.5,0.6',
+                    '0.6,0.7', '0.7,0.8', '0.8,0.9', '0.9,1.0'])
+        plt.title('FP WSNE NE')
+        file_name = "FPWSNENEHist.jpg"
+        if G10 == 20 and G01 == 20:
+            plt.savefig(P1_path + "/" + file_name)
+        elif G10 == 20 and G01 == 50:
+            plt.savefig(P2_path + "/" + file_name)
+        elif G10 == 20 and G01 == 70:
+            plt.savefig(P3_path + "/" + file_name)
+        elif G10 == 35 and G01 == 35:
+            plt.savefig(P4_path + "/" + file_name)
+        plt.show()
+        plt.close()
+
+        plt.bar(range(len(FPUniformApproxNEHistogram)), FPUniformApproxNEHistogram, align='center')
+        plt.xticks(range(len(FPUniformApproxNEHistogram)),
+                   ['0.0,0.1', '0.1,0.2', '0.2,0.3', '0.3,0.4', '0.4,0.5', '0.5,0.6',
+                    '0.6,0.7', '0.7,0.8', '0.8,0.9', '0.9,1.0'])
+        plt.title('FP uniform ApproxNE')
+        file_name = "FPUniformApproxNEHist.jpg"
+        if G10 == 20 and G01 == 20:
+            plt.savefig(P1_path + "/" + file_name)
+        elif G10 == 20 and G01 == 50:
+            plt.savefig(P2_path + "/" + file_name)
+        elif G10 == 20 and G01 == 70:
+            plt.savefig(P3_path + "/" + file_name)
+        elif G10 == 35 and G01 == 35:
+            plt.savefig(P4_path + "/" + file_name)
+        plt.show()
+        plt.close()
+
+        plt.bar(range(len(FPUniformWSNENEHistogram)), FPUniformWSNENEHistogram, align='center')
+        plt.xticks(range(len(FPUniformWSNENEHistogram)),
+                   ['0.0,0.1', '0.1,0.2', '0.2,0.3', '0.3,0.4', '0.4,0.5', '0.5,0.6',
+                    '0.6,0.7', '0.7,0.8', '0.8,0.9', '0.9,1.0'])
+        plt.title('FP uniform WSNE NE')
+        file_name = "FPUniformWSNENEHist.jpg"
+        if G10 == 20 and G01 == 20:
+            plt.savefig(P1_path + "/" + file_name)
+        elif G10 == 20 and G01 == 50:
+            plt.savefig(P2_path + "/" + file_name)
+        elif G10 == 20 and G01 == 70:
+            plt.savefig(P3_path + "/" + file_name)
+        elif G10 == 35 and G01 == 35:
+            plt.savefig(P4_path + "/" + file_name)
+        plt.show()
+        plt.close()
+
+    if algorithm.upper() == 'DEL' or algorithm.upper() == 'ALL':
+        plt.bar(range(len(DELApproxNEHistogram)), DELApproxNEHistogram, align='center')
+        plt.xticks(range(len(DELApproxNEHistogram)),
+                   ['0.0,0.1', '0.1,0.2', '0.2,0.3', '0.3,0.4', '0.4,0.5', '0.5,0.6',
+                    '0.6,0.7', '0.7,0.8', '0.8,0.9', '0.9,1.0'])
+        plt.title('DEL ApproxNE')
+        file_name = "DELApproxNEHist.jpg"
+        if G10 == 20 and G01 == 20:
+            plt.savefig(P1_path + "/" + file_name)
+        elif G10 == 20 and G01 == 50:
+            plt.savefig(P2_path + "/" + file_name)
+        elif G10 == 20 and G01 == 70:
+            plt.savefig(P3_path + "/" + file_name)
+        elif G10 == 35 and G01 == 35:
+            plt.savefig(P4_path + "/" + file_name)
+        plt.show()
+        plt.close()
+
+        plt.bar(range(len(DELWSNENEHistogram)), DELWSNENEHistogram, align='center')
+        plt.xticks(range(len(DELWSNENEHistogram)),
+                   ['0.0,0.1', '0.1,0.2', '0.2,0.3', '0.3,0.4', '0.4,0.5', '0.5,0.6',
+                    '0.6,0.7', '0.7,0.8', '0.8,0.9', '0.9,1.0'])
+        plt.title('DEL WSNE NE')
+        file_name = "DELWSNENEHist.jpg"
+        if G10 == 20 and G01 == 20:
+            plt.savefig(P1_path + "/" + file_name)
+        elif G10 == 20 and G01 == 50:
+            plt.savefig(P2_path + "/" + file_name)
+        elif G10 == 20 and G01 == 70:
+            plt.savefig(P3_path + "/" + file_name)
+        elif G10 == 35 and G01 == 35:
+            plt.savefig(P4_path + "/" + file_name)
+        plt.show()
+        plt.close()
+
+    # convert histograms to numpy arrays
+    DMPApprox_array = np.array(DMPApproxNEHistogram)
+    DMPWSNE_array = np.array(DMPWSNENEHistogram)
+    FPApprox_array = np.array(FPApproxNEHistogram)
+    FPWSNE_array = np.array(FPWSNENEHistogram)
+    FPApproxUniform_array = np.array(FPUniformApproxNEHistogram)
+    FPWSNEUniform_array = np.array(FPUniformWSNENEHistogram)
+    DELApprox_array = np.array(DELApproxNEHistogram)
+    DELWSNE_array = np.array(DELWSNENEHistogram)
+
+    if G10 == 20 and G01 == 20:
+        if algorithm.upper() == 'DMP' or algorithm.upper() == 'ALL':
+            np.savetxt(os.path.join(P1_path, "DMPApprox.out"), DMPApprox_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DMPWSNE.out"), DMPWSNE_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DMPWorstR1.out"), DMP_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DMPWorstR2.out"), DMP_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DMPWorstC1.out"), DMP_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DMPWorstC2.out"), DMP_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DMPWSNEWorstR1.out"), DMP_WSNE_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DMPWSNEWorstR2.out"), DMP_WSNE_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DMPWSNEWorstC1.out"), DMP_WSNE_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DMPWSNEWorstC2.out"), DMP_WSNE_worst_C[1], delimiter=',', fmt='%1.4e')
+
+        if algorithm.upper() == 'FP' or algorithm.upper() == 'ALL':
+            np.savetxt(os.path.join(P1_path, "FPApprox.out"), FPApprox_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPWSNE.out"), FPWSNE_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPUniformApprox.out"), FPApproxUniform_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPUniformWSNE.out"), FPWSNEUniform_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPWorstR1.out"), FP_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPWorstR2.out"), FP_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPWorstC1.out"), FP_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPWorstC2.out"), FP_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPWSNEWorstR1.out"), FP_WSNE_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPWSNEWorstR2.out"), FP_WSNE_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPWSNEWorstC1.out"), FP_WSNE_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPWSNEWorstC2.out"), FP_WSNE_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPUniformWorstR1.out"), FP_uniform_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPUniformWorstR2.out"), FP_uniform_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPUniformWorstC1.out"), FP_uniform_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPUniformWorstC2.out"), FP_uniform_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPUniformWSNEWorstR1.out"), FP_uniform_WSNE_worst_R[0], delimiter=',',
+                       fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPUniformWSNEWorstR2.out"), FP_uniform_WSNE_worst_R[1], delimiter=',',
+                       fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPUniformWSNEWorstC1.out"), FP_uniform_WSNE_worst_C[0], delimiter=',',
+                       fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "FPUniformWSNEWorstC2.out"), FP_uniform_WSNE_worst_C[1], delimiter=',',
+                       fmt='%1.4e')
+
+        if algorithm.upper() == 'DEL' or algorithm.upper() == 'ALL':
+            np.savetxt(os.path.join(P1_path, "DELApprox.out"), DELApprox_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DELWSNE.out"), DELWSNE_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DELWorstR1.out"), DEL_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DELWorstR2.out"), DEL_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DELWorstC1.out"), DEL_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DELWorstC2.out"), DEL_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DELWSNEWorstR1.out"), DEL_WSNE_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DELWSNEWorstR2.out"), DEL_WSNE_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DELWSNEWorstC1.out"), DEL_WSNE_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P1_path, "DELWSNEWorstC2.out"), DEL_WSNE_worst_C[1], delimiter=',', fmt='%1.4e')
+    elif G10 == 20 and G01 == 50:
+        if algorithm.upper() == 'DMP' or algorithm.upper() == 'ALL':
+            np.savetxt(os.path.join(P2_path, "DMPApprox.out"), DMPApprox_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DMPWSNE.out"), DMPWSNE_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DMPWorstR1.out"), DMP_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DMPWorstR2.out"), DMP_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DMPWorstC1.out"), DMP_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DMPWorstC2.out"), DMP_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DMPWSNEWorstR1.out"), DMP_WSNE_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DMPWSNEWorstR2.out"), DMP_WSNE_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DMPWSNEWorstC1.out"), DMP_WSNE_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DMPWSNEWorstC2.out"), DMP_WSNE_worst_C[1], delimiter=',', fmt='%1.4e')
+
+        if algorithm.upper() == 'FP' or algorithm.upper() == 'ALL':
+            np.savetxt(os.path.join(P2_path, "FPApprox.out"), FPApprox_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPWSNE.out"), FPWSNE_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPUniformApprox.out"), FPApproxUniform_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPUniformWSNE.out"), FPWSNEUniform_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPWorstR1.out"), FP_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPWorstR2.out"), FP_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPWorstC1.out"), FP_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPWorstC2.out"), FP_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPWSNEWorstR1.out"), FP_WSNE_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPWSNEWorstR2.out"), FP_WSNE_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPWSNEWorstC1.out"), FP_WSNE_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPWSNEWorstC2.out"), FP_WSNE_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPUniformWorstR1.out"), FP_uniform_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPUniformWorstR2.out"), FP_uniform_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPUniformWorstC1.out"), FP_uniform_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPUniformWorstC2.out"), FP_uniform_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPUniformWSNEWorstR1.out"), FP_uniform_WSNE_worst_R[0], delimiter=',',
+                       fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPUniformWSNEWorstR2.out"), FP_uniform_WSNE_worst_R[1], delimiter=',',
+                       fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPUniformWSNEWorstC1.out"), FP_uniform_WSNE_worst_C[0], delimiter=',',
+                       fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "FPUniformWSNEWorstC2.out"), FP_uniform_WSNE_worst_C[1], delimiter=',',
+                       fmt='%1.4e')
+
+        if algorithm.upper() == 'DEL' or algorithm.upper() == 'ALL':
+            np.savetxt(os.path.join(P2_path, "DELApprox.out"), DELApprox_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DELWSNE.out"), DELWSNE_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DELWorstR1.out"), DEL_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DELWorstR2.out"), DEL_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DELWorstC1.out"), DEL_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DELWorstC2.out"), DEL_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DELWSNEWorstR1.out"), DEL_WSNE_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DELWSNEWorstR2.out"), DEL_WSNE_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DELWSNEWorstC1.out"), DEL_WSNE_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P2_path, "DELWSNEWorstC2.out"), DEL_WSNE_worst_C[1], delimiter=',', fmt='%1.4e')
+    elif G10 == 20 and G01 == 70:
+        if algorithm.upper() == 'DMP' or algorithm.upper() == 'ALL':
+            np.savetxt(os.path.join(P3_path, "DMPApprox.out"), DMPApprox_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DMPWSNE.out"), DMPWSNE_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DMPWorstR1.out"), DMP_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DMPWorstR2.out"), DMP_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DMPWorstC1.out"), DMP_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DMPWorstC2.out"), DMP_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DMPWSNEWorstR1.out"), DMP_WSNE_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DMPWSNEWorstR2.out"), DMP_WSNE_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DMPWSNEWorstC1.out"), DMP_WSNE_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DMPWSNEWorstC2.out"), DMP_WSNE_worst_C[1], delimiter=',', fmt='%1.4e')
+
+        if algorithm.upper() == 'FP' or algorithm.upper() == 'ALL':
+            np.savetxt(os.path.join(P3_path, "FPApprox.out"), FPApprox_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPWSNE.out"), FPWSNE_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPUniformApprox.out"), FPApproxUniform_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPUniformWSNE.out"), FPWSNEUniform_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPWorstR1.out"), FP_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPWorstR2.out"), FP_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPWorstC1.out"), FP_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPWorstC2.out"), FP_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPWSNEWorstR1.out"), FP_WSNE_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPWSNEWorstR2.out"), FP_WSNE_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPWSNEWorstC1.out"), FP_WSNE_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPWSNEWorstC2.out"), FP_WSNE_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPUniformWorstR1.out"), FP_uniform_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPUniformWorstR2.out"), FP_uniform_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPUniformWorstC1.out"), FP_uniform_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPUniformWorstC2.out"), FP_uniform_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPUniformWSNEWorstR1.out"), FP_uniform_WSNE_worst_R[0], delimiter=',',
+                       fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPUniformWSNEWorstR2.out"), FP_uniform_WSNE_worst_R[1], delimiter=',',
+                       fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPUniformWSNEWorstC1.out"), FP_uniform_WSNE_worst_C[0], delimiter=',',
+                       fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "FPUniformWSNEWorstC2.out"), FP_uniform_WSNE_worst_C[1], delimiter=',',
+                       fmt='%1.4e')
+
+        if algorithm.upper() == 'DEL' or algorithm.upper() == 'ALL':
+            np.savetxt(os.path.join(P3_path, "DELApprox.out"), DELApprox_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DELWSNE.out"), DELWSNE_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DELWorstR1.out"), DEL_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DELWorstR2.out"), DEL_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DELWorstC1.out"), DEL_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DELWorstC2.out"), DEL_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DELWSNEWorstR1.out"), DEL_WSNE_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DELWSNEWorstR2.out"), DEL_WSNE_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DELWSNEWorstC1.out"), DEL_WSNE_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P3_path, "DELWSNEWorstC2.out"), DEL_WSNE_worst_C[1], delimiter=',', fmt='%1.4e')
+    elif G10 == 35 and G01 == 35:
+        if algorithm.upper() == 'DMP' or algorithm.upper() == 'ALL':
+            np.savetxt(os.path.join(P4_path, "DMPApprox.out"), DMPApprox_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DMPWSNE.out"), DMPWSNE_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DMPWorstR1.out"), DMP_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DMPWorstR2.out"), DMP_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DMPWorstC1.out"), DMP_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DMPWorstC2.out"), DMP_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DMPWSNEWorstR1.out"), DMP_WSNE_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DMPWSNEWorstR2.out"), DMP_WSNE_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DMPWSNEWorstC1.out"), DMP_WSNE_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DMPWSNEWorstC2.out"), DMP_WSNE_worst_C[1], delimiter=',', fmt='%1.4e')
+
+        if algorithm.upper() == 'FP' or algorithm.upper() == 'ALL':
+            np.savetxt(os.path.join(P4_path, "FPApprox.out"), FPApprox_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPWSNE.out"), FPWSNE_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPUniformApprox.out"), FPApproxUniform_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPUniformWSNE.out"), FPWSNEUniform_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPWorstR1.out"), FP_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPWorstR2.out"), FP_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPWorstC1.out"), FP_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPWorstC2.out"), FP_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPWSNEWorstR1.out"), FP_WSNE_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPWSNEWorstR2.out"), FP_WSNE_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPWSNEWorstC1.out"), FP_WSNE_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPWSNEWorstC2.out"), FP_WSNE_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPUniformWorstR1.out"), FP_uniform_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPUniformWorstR2.out"), FP_uniform_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPUniformWorstC1.out"), FP_uniform_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPUniformWorstC2.out"), FP_uniform_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPUniformWSNEWorstR1.out"), FP_uniform_WSNE_worst_R[0], delimiter=',',
+                       fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPUniformWSNEWorstR2.out"), FP_uniform_WSNE_worst_R[1], delimiter=',',
+                       fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPUniformWSNEWorstC1.out"), FP_uniform_WSNE_worst_C[0], delimiter=',',
+                       fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "FPUniformWSNEWorstC2.out"), FP_uniform_WSNE_worst_C[1], delimiter=',',
+                       fmt='%1.4e')
+
+        if algorithm.upper() == 'DEL' or algorithm.upper() == 'ALL':
+            np.savetxt(os.path.join(P4_path, "DELApprox.out"), DELApprox_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DELWSNE.out"), DELWSNE_array, delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DELWorstR1.out"), DEL_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DELWorstR2.out"), DEL_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DELWorstC1.out"), DEL_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DELWorstC2.out"), DEL_worst_C[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DELWSNEWorstR1.out"), DEL_WSNE_worst_R[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DELWSNEWorstR2.out"), DEL_WSNE_worst_R[1], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DELWSNEWorstC1.out"), DEL_WSNE_worst_C[0], delimiter=',', fmt='%1.4e')
+            np.savetxt(os.path.join(P4_path, "DELWSNEWorstC2.out"), DEL_WSNE_worst_C[1], delimiter=',', fmt='%1.4e')
 
 ### MAIN PROGRAM FOR LAB-2 ###
 
@@ -855,36 +1445,22 @@ PLUSLINE = drawLine(LINELENGTH, '+')
 
 print_LAB2_preamble()
 
-screen_clear()
-
 maxNumOfRandomGamesToSolve = 10000
 
 maxNumberOfActions = 20
 
-m, n = determineGameDimensions()
-
-G10, G01 = determineNumGoodCellsForPlayers(m, n)
-
-numOfRandomGamesToSolve = determineNumRandomGamesToSolve()
-
-DMP_Approx_results = []
-DMP_WSNE_results = []
-DMP_results_R = []
-DMP_results_C = []
-DEL_Approx_results = []
-DEL_WSNE_results = []
-DEL_results_R = []
-DEL_results_C = []
-FP_Approx_results = []
-FP_WSNE_results = []
-FP_results_R = []
-FP_results_C = []
-FP_Approx_uniform_results = []
-FP_WSNE_uniform_results = []
-FP_uniform_R = []
-FP_uniform_C = []
-
-for i in range(numOfRandomGamesToSolve):
+choice = input('Do you want to load custom (R, C) matrixes? (y/n)')
+if choice == 'y':
+    file_name_R = input('Enter the file name for R matrix: ')
+    file_name_C = input('Enter the file name for C matrix: ')
+    R = np.genfromtxt(os.path.join(os.getcwd(), file_name_R), delimiter=',', skip_header=0)
+    C = np.genfromtxt(os.path.join(os.getcwd(), file_name_C), delimiter=',', skip_header=0)
+    m = len(R)
+    n = len(R[0])
+else:
+    m, n = determineGameDimensions()
+    G10, G01 = determineNumGoodCellsForPlayers(m, n)
+    numOfRandomGamesToSolve = determineNumRandomGamesToSolve()
     earliestColFor01 = 0
     earliestRowFor10 = 0
 
@@ -908,146 +1484,58 @@ for i in range(numOfRandomGamesToSolve):
 
     drawBimatrix(m, n, R, C)
 
-    # SEEKING FOR PNE IN THE GAME (R,C)...
-    (i, j) = checkForPNE(m, n, R, C)
+choice = input('Do you want to save (R, C) matrixes? (y/n)')
+if choice == 'y':
+    file_name_R = input('Enter the file name for R matrix: ')
+    file_name_C = input('Enter the file name for C matrix: ')
+    np.savetxt(file_name_R, R, delimiter=',', fmt='%1.4e')
+    np.savetxt(file_name_C, C, delimiter=',', fmt='%1.4e')
 
+drawBimatrix(m, n, R, C)
+choice = input('Do you want to check for PNE? (y/n)')
+if choice == 'y':
+    i, j = checkForPNE(m, n, R, C)
     if (i, j) != (-1, -1):
         print(bcolors.MSG + "A pure NE (", i, ",", j, ") was discovered for (R,C)." + bcolors.ENDC)
         exit()
     else:
         print(bcolors.MSG + "No pure NE exists for (R,C). Looking for an approximate NE point..." + bcolors.ENDC)
-    reduced_m, reduced_n, reduced_R, reduced_C = deleteStrictlyDominatedStrategies(m, n, R, C)
 
-    print(bcolors.MSG + "Reduced bimatrix, after removal of strictly dominated actions:")
-    drawBimatrix(reduced_m, reduced_n, reduced_R, reduced_C)
+choice = input('Do you want to run an algorithm on (R, C) (y/n):')
+if choice == 'y':
+    algorithm_name = input("Choose an algorithm to run for the game(DMP, DEL, FP): ")
+    if algorithm_name.upper() == 'DMP':
+        x, y, epsApprox, epsWSNE = approxNEConstructionDMP(m, n, R, C)
+        print(bcolors.MSG + PLUSLINE)
+        print("\tConstructed solution for DMP:")
+        print(MINUSLINE)
+        print("\tDMPx =", x, "\n\tDMPy =", y)
+        print("\tDMPepsAPPROX =", epsApprox, ".\tDMPepsWSNE =", epsWSNE, "." + bcolors.ENDC)
+        print(PLUSLINE + bcolors.ENDC)
+    elif algorithm_name.upper() == 'DEL':
+        x, y, epsApprox, epsWSNE = approxNEConstructionDEL(m, n, R, C)
+        print(bcolors.MSG + PLUSLINE)
+        print("\tConstructed solution for DEL:")
+        print(MINUSLINE)
+        print("\tDELx =", x, "\n\tDELy =", y)
+        print("\tDELepsAPPROX =", epsApprox, ".\tDELepsWSNE =", epsWSNE, "." + bcolors.ENDC)
+        print(PLUSLINE + bcolors.ENDC)
+    elif algorithm_name.upper() == 'FP':
+        x, y, x_uniform, y_uniform, epsApprox, epsWSNE, epsApproxUniform, epsWSNEUniform = approxNEConstructionFP(m, n, R, C)
+        print(bcolors.MSG + PLUSLINE)
+        print("\tConstructed solution for FICTITIOUS PLAY:")
+        print(MINUSLINE)
+        print("\tFPx =", x, "\n\tFPy =", y)
+        print("\tFPepsAPPROX =", epsApprox, ".\tFPepsWSNE =", epsWSNE, ".")
+        print(PLUSLINE + bcolors.ENDC)
+        print(bcolors.MSG + PLUSLINE)
+        print("\tConstructed solution for UNIFORM FICTITIOUS PLAY:")
+        print(MINUSLINE)
+        print("\tFP_Uniform_x =", x_uniform, "\n\tFP_Uniform_y =", y_uniform)
+        print("\tFP_Uniform_epsAPPROX =", epsApproxUniform, ".\tFP_Uniform_epsWSNE =", epsWSNEUniform, ".")
+        print(PLUSLINE + bcolors.ENDC)
 
-    ### EXECUTING DMP ALGORITHM...
-    x, y, DMPepsAPPROX, DMPepsWSNE = approxNEConstructionDMP(reduced_m, reduced_n, reduced_R, reduced_C)
-    DMP_Approx_results.append(round(DMPepsAPPROX, 3))
-    DMP_WSNE_results.append(round(DMPepsWSNE, 3))
-    DMP_results_R.append(R)
-    DMP_results_C.append(C)
-    DMPx, DMPy = interpretReducedStrategiesForOriginalGame(x, y, R, C, reduced_R, reduced_C)
-    print(bcolors.MSG + PLUSLINE)
-    print("\tConstructed solution for DMP:")
-    print(MINUSLINE)
-    print("\tDMPx =", DMPx, "\n\tDMPy =", DMPy)
-    print("\tDMPepsAPPROX =", DMPepsAPPROX, ".\tDMPepsWSNE =", DMPepsWSNE, "." + bcolors.ENDC)
-    print(PLUSLINE + bcolors.ENDC)
-
-    ### EXECUTING FICTITIOUS PLAY ALGORITHM...
-    x, y, x_uniform, y_uniform, FPepsAPPROX, FPepsWSNE, uniformFPepsAPPROX, uniformFPepsWNSE = approxNEConstructionFP(
-        reduced_m, reduced_n, reduced_R, reduced_C)
-    FP_Approx_results.append(round(FPepsAPPROX, 4))
-    FP_WSNE_results.append(round(FPepsWSNE, 3))
-    FP_results_R.append(R)
-    FP_results_C.append(C)
-    FP_Approx_uniform_results.append(round(uniformFPepsAPPROX, 3))
-    FP_WSNE_uniform_results.append(round(uniformFPepsWNSE, 3))
-    FP_uniform_R.append(R)
-    FP_uniform_C.append(C)
-    FPx, FPy = interpretReducedStrategiesForOriginalGame(x, y, R, C, reduced_R, reduced_C)
-    print("Uniform", x_uniform, y_uniform)
-    print(bcolors.MSG + PLUSLINE)
-    print("\tConstructed solution for FICTITIOUS PLAY:")
-    print(MINUSLINE)
-    print("\tFPx =", FPx, "\n\tFPy =", FPy)
-    print("\tFPepsAPPROX =", FPepsAPPROX, ".\tFPepsWSNE =", FPepsWSNE, ".")
-    print(PLUSLINE + bcolors.ENDC)
-
-    ### EXECUTING DEL ALGORITHM...
-    print("reduced_m, reduced_n, lenR, lenC", reduced_m, reduced_n, len(reduced_R), len(reduced_C))
-    x, y, DELepsAPPROX, DELepsWSNE = approxNEConstructionDEL(reduced_m, reduced_n, reduced_R, reduced_C)
-    DEL_Approx_results.append(round(DELepsAPPROX, 3))
-    DEL_WSNE_results.append(round(DELepsWSNE, 3))
-    DEL_results_R.append(R)
-    DEL_results_C.append(C)
-    DELx, DELy = interpretReducedStrategiesForOriginalGame(x, y, R, C, reduced_R, reduced_C)
-    print(bcolors.MSG + PLUSLINE)
-    print("\tConstructed solution for DEL:")
-    print(MINUSLINE)
-    print("\tDELx =", DELx, "\n\tDELy =", DELy)
-    print("\tDELepsAPPROX =", DELepsAPPROX, ".\tDELepsWSNE =", DELepsWSNE, ".")
-    print(PLUSLINE + bcolors.ENDC)
-
-DMPepsApprox_games = np.zeros(10)
-DMPepsWSNE_games = np.zeros(10)
-FPepsApprox_games = np.zeros(10)
-FPPepsWSNE_games = []
-uniformFPPepsApprox_games = []
-uniformDMPepsWSNE_games = []
-DELepsApprox_games = []
-DELepsWSNE_games = []
-
-# Define the boundaries for the buckets
-bucket_boundaries = [0.001, 0.101, 0.201, 0.301, 0.401, 0.501, 0.601, 0.701, 0.801, 0.901, 1.001]
-
-# Compute the histogram
-DMPApproxNEHistogram, DMPApproxbin_edges = np.histogram(DMP_Approx_results, bins=bucket_boundaries)
-DMPWSNENEHistogram, DMPWSNEbin_edges = np.histogram(DMP_WSNE_results, bins=bucket_boundaries)
-FPApproxNEHistogram, FPApproxbin_edges = np.histogram(FP_Approx_results, bins=bucket_boundaries)
-print("FP Approx: ", FP_Approx_results)
-print("FP hist: ", FPApproxNEHistogram)
-FPWSNENEHistogram, FPWSNEbin_edges = np.histogram(FP_WSNE_results, bins=bucket_boundaries)
-print("FP WSNE: ", FP_WSNE_results)
-print("FP hist: ", FPWSNENEHistogram)
-FPUniformApproxNEHistogram, FPUniformApproxbin_edges = np.histogram(FP_Approx_uniform_results, bins=bucket_boundaries)
-print("FP uniform Approx: ", FP_Approx_uniform_results)
-print("FP uniform hist: ", FPUniformApproxNEHistogram)
-FPUniformWSNENEHistogram, FPUniformWSNEbin_edges = np.histogram(FP_WSNE_uniform_results, bins=bucket_boundaries)
-print("FP uniform WSNE: ", FP_Approx_results)
-print("FP uniform hist: ", FPUniformWSNENEHistogram)
-DELApproxNEHistogram, DELApproxbin_edges = np.histogram(DEL_Approx_results, bins=bucket_boundaries)
-print("DEL Approx: ", DEL_Approx_results)
-print("DEL hist: ", DELApproxNEHistogram)
-DELWSNENEHistogram, DELWSNEbin_edges = np.histogram(DEL_WSNE_results, bins=bucket_boundaries)
-print("DEL WSNE: ", DEL_WSNE_results)
-print("DEL hist: ", DELWSNENEHistogram)
-
-plt.bar(range(len(DMPApproxNEHistogram)), DMPApproxNEHistogram, align='center')
-plt.xticks(range(len(DMPApproxNEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
-                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
-plt.title('DMP ApproxNE')
-plt.show()
-
-plt.bar(range(len(DMPWSNENEHistogram)), DMPWSNENEHistogram, align='center')
-plt.xticks(range(len(DMPWSNENEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
-                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
-plt.title('DMP WNSE NE')
-plt.show()
-
-plt.bar(range(len(FPApproxNEHistogram)), FPApproxNEHistogram, align='center')
-plt.xticks(range(len(FPApproxNEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
-                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
-plt.title('FP ApproxNE')
-plt.show()
-
-plt.bar(range(len(FPWSNENEHistogram)), FPWSNENEHistogram, align='center')
-plt.xticks(range(len(FPWSNENEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
-                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
-plt.title('FP WSNE NE')
-plt.show()
-
-plt.bar(range(len(FPUniformApproxNEHistogram)), FPUniformApproxNEHistogram, align='center')
-plt.xticks(range(len(FPUniformApproxNEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
-                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
-plt.title('FP uniform ApproxNE')
-plt.show()
-
-plt.bar(range(len(FPUniformWSNENEHistogram)), FPUniformWSNENEHistogram, align='center')
-plt.xticks(range(len(FPUniformWSNENEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
-                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
-plt.title('FP uniform WSNE NE')
-plt.show()
-
-plt.bar(range(len(DELApproxNEHistogram)), DELApproxNEHistogram, align='center')
-plt.xticks(range(len(DELApproxNEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
-                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
-plt.title('DEL ApproxNE')
-plt.show()
-
-plt.bar(range(len(DELWSNENEHistogram)), DELWSNENEHistogram, align='center')
-plt.xticks(range(len(DELWSNENEHistogram)), ['Bucket 1', 'Bucket 2', 'Bucket 3', 'Bucket 4', 'Bucket 5', 'Bucket 6',
-                                              'Bucket 7', 'Bucket 8', 'Bucket 9', 'Bucket 10'])
-plt.title('DEL WSNE NE')
-plt.show()
+choice = input('Do you want to run a mass experiment(y/n):')
+if choice == 'y':
+    algorithm = input('Enter the algorithm you want to run:\n1. DMP\n2. DEL\n3. FP\n4. ALL\n->')
+    chooseExperiment(algorithm)
