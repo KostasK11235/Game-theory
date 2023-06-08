@@ -690,8 +690,12 @@ def approxNEConstructionDEL(m, n, R, C):
             x_final = x_row
             y_final = y_col
     elif max((np.dot(np.array(x_row).reshape(1, len(x_row)), C)) <= 2 / 3):
-        x_final = x_row
-        y_final = y_row
+        if swap_flag == 0:
+            x_final = x_row
+            y_final = y_row
+        else:
+            x_final = x_col
+            y_final = y_col
     else:
         j = np.dot(np.array(x_row).reshape(1, len(x_row)), C).index(
             max(np.dot(np.array(x_row).reshape(1, len(x_row)), C)))
