@@ -818,9 +818,9 @@ def print_LAB2_preamble():
     print(bcolors.HEADER + MINUSLINE + """
                         CEID-NE509 (2022-3) / LAB-2""")
     print(MINUSLINE + """
-        STUDENT NAME:           < provide your name here >
-        STUDENT AM:             < provide your AM here >
-        JOINT WORK WITH:        < provide your partner's name and AM here >""")
+        STUDENT NAME:           < Kostas Karaiskos >
+        STUDENT AM:             < 1072636 >
+        JOINT WORK WITH:        < Vergos Theofanis 1072560 >""")
     print(MINUSLINE + bcolors.ENDC)
 
     input("Press ENTER to continue...")
