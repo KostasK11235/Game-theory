@@ -557,9 +557,6 @@ def computeApproximationGuarantees(m, n, R, C, x, y):
 
     support_x = np.nonzero(x)[0]
     support_y = np.nonzero(y)[0]
-    print("guarantees\nx is: ", x, "\ny is: ", y)
-    print("support x", support_x)
-    print("support y", support_y)
     while ((maxRy - epsAPPROX > xtRy) or (maxCtx - epsAPPROX > xtCy)):
         epsAPPROX = epsAPPROX + 0.01
 
@@ -567,12 +564,6 @@ def computeApproximationGuarantees(m, n, R, C, x, y):
     min_Ry = np.min(R[support_x] @ y)
     max_CTx = np.max(C.T @ x)
     min_CTx = np.min(C.T[support_y] @ x)
-    print("R@y", R@y)
-    print("CT@x", x_trans @ C)
-    print("Max dot Ry: ", maxRy)
-    print("Max dot CTx: ", maxCtx)
-    print("MaxRy: ", max_Ry, "\nMinRy: ", min_Ry)
-    print("MaxCTx: ", max_CTx, "\nMinCTx: ", min_CTx)
     while ((max_Ry - epsWSNE > min_Ry) or (max_CTx - epsWSNE > min_CTx)):
         epsWSNE = epsWSNE + 0.01
 
@@ -609,7 +600,6 @@ def approxNEConstructionDMP(m, n, R, C):
 
     return (x, y, epsAPPROX, epsWSNE)
 
-
 def approxNEConstructionFP(m, n, R, C):
     print(bcolors.TODO + '''
     ROUTINE: approxNEConstructionFP
@@ -618,41 +608,45 @@ def approxNEConstructionFP(m, n, R, C):
 
     row_beliefs = [0] * m
     column_beliefs = [0] * n
-
     row_beliefs[0] = 1
     column_beliefs[0] = 1
+    x_plays = row_beliefs
+    y_plays = column_beliefs
 
     for i in range(1, 100):
-        row_best_response = np.argmax(np.dot(column_beliefs, R.T))
-        col_best_response = np.argmax(np.dot(row_beliefs, C))
-        row_beliefs = np.zeros(m)
-        column_beliefs = np.zeros(n)
-        row_beliefs[row_best_response] = 1
-        column_beliefs[col_best_response] = 1
+        row_best_response = np.argmax(np.dot(y_plays, R.T))
+        col_best_response = np.argmax(np.dot(x_plays, C))
+        row_beliefs[row_best_response] += 1
+        column_beliefs[col_best_response] += 1
+        x_plays = [x/i for x in row_beliefs]
+        y_plays = [x/i for x in column_beliefs]
 
     uniform_row_beliefs = np.ones(m) / m
     uniform_column_beliefs = np.ones(n) / n
+    x_plays_uniform = uniform_row_beliefs
+    y_plays_uniform = uniform_column_beliefs
 
     for i in range(1, 100):
-        uniform_row_best_response = np.max(np.dot(uniform_column_beliefs, R.T))
-        uniform_col_best_response = np.max(np.dot(uniform_row_beliefs, C))
-        row_max_indexes = np.where(np.dot(uniform_column_beliefs, R.T) == uniform_row_best_response)[0]
-        col_max_indexes = np.where(np.dot(uniform_row_beliefs, C) == uniform_col_best_response)[0]
+        uniform_row_best_response = np.max(np.dot(y_plays_uniform, R.T))
+        uniform_col_best_response = np.max(np.dot(x_plays_uniform, C))
+        row_max_indexes = np.where(np.dot(y_plays_uniform, R.T) == uniform_row_best_response)[0]
+        col_max_indexes = np.where(np.dot(x_plays_uniform, C) == uniform_col_best_response)[0]
 
-        uniform_row_beliefs = np.zeros(m)
-        uniform_column_beliefs = np.zeros(n)
         for index in row_max_indexes:
-            uniform_row_beliefs[index] = 1 / len(row_max_indexes)
+            uniform_row_beliefs[index] += 1 / len(row_max_indexes)
 
         for index in col_max_indexes:
-            uniform_column_beliefs[index] = 1 / len(col_max_indexes)
+            uniform_column_beliefs[index] += 1 / len(col_max_indexes)
 
-    row_beliefs = np.array(row_beliefs).reshape(len(row_beliefs), 1)
-    uniform_row_beliefs = np.array(uniform_row_beliefs).reshape(len(uniform_row_beliefs), 1)
+        x_plays_uniform =[x/i for x in uniform_row_beliefs]
+        y_plays_uniform = [x/i for x in uniform_column_beliefs]
 
-    epsAPPROX, epsWSNE = computeApproximationGuarantees(m, n, R, C, row_beliefs, column_beliefs)
-    uniform_epsAPPROX, uniform_epsWSNE = computeApproximationGuarantees(m, n, R, C, uniform_row_beliefs,
-                                                                          uniform_column_beliefs)
+    x_plays = np.array(x_plays).reshape(len(x_plays), 1)
+    x_plays_uniform = np.array(x_plays_uniform).reshape(len(x_plays_uniform), 1)
+
+    epsAPPROX, epsWSNE = computeApproximationGuarantees(m, n, R, C, x_plays, y_plays)
+    uniform_epsAPPROX, uniform_epsWSNE = computeApproximationGuarantees(m, n, R, C, x_plays_uniform, y_plays_uniform)
+
     return (
         row_beliefs, column_beliefs, uniform_row_beliefs, uniform_column_beliefs, epsAPPROX, epsWSNE, uniform_epsAPPROX,
         uniform_epsWSNE)
@@ -687,7 +681,6 @@ def approxNEConstructionDEL(m, n, R, C):
         m = n
         n = tempm
         swap_flag = 1
-        print("Done that")
 
     if V_row <= 2/3:
         if swap_flag==0:
@@ -696,11 +689,9 @@ def approxNEConstructionDEL(m, n, R, C):
         else:
             x_final = x_row
             y_final = y_col
-            print("scenario 1")
     elif max((np.dot(np.array(x_row).reshape(1, len(x_row)), C)) <= 2 / 3):
         x_final = x_row
         y_final = y_row
-        print("scenario 2")
     else:
         j = np.dot(np.array(x_row).reshape(1, len(x_row)), C).index(
             max(np.dot(np.array(x_row).reshape(1, len(x_row)), C)))
@@ -711,7 +702,6 @@ def approxNEConstructionDEL(m, n, R, C):
         y_final = [0] * n
         x_final[index] = 1
         y_final[index] = 1
-        print("scenario 3")
 
     if swap_flag:
         tempR = R
